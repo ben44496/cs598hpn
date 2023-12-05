@@ -73,7 +73,7 @@ cs598EchoClient::GetTypeId()
     return tid;
 }
 
-cs598EchoClient::cs598EchoClient()
+cs598EchoClient::cs598EchoClient() : m_packetLossCounterFast(0), m_packetLossCounterSlow(0)
 {
     NS_LOG_FUNCTION(this);
     m_sent = 0;
@@ -82,6 +82,8 @@ cs598EchoClient::cs598EchoClient()
     m_sendEvent = EventId();
     m_data = nullptr;
     m_dataSize = 0;
+    m_bufferFast.seq = 0;
+    m_bufferSlow.seq = 0;
 }
 
 cs598EchoClient::~cs598EchoClient()
@@ -130,6 +132,10 @@ void
 cs598EchoClient::StartApplication()
 {
     NS_LOG_FUNCTION(this);
+    // m_packetLossCounterFast.SetBitMapSize(sizeof(SequenceNumber)*8);
+    // m_packetLossCounterSlow.SetBitMapSize(sizeof(SequenceNumber)*8);
+    m_packetLossCounterFast.SetBitMapSize(64);
+    m_packetLossCounterSlow.SetBitMapSize(64);
     if (!m_socketFast)
     {
         TypeId tid = TypeId::LookupByName("ns3::UdpSocketFactory");
@@ -251,45 +257,54 @@ cs598EchoClient::Send()
     NS_ASSERT(m_sendEvent.IsExpired());
 
     Ptr<Packet> p;
-    if (m_dataSize)
-    {
-        //
-        // If m_dataSize is non-zero, we have a data buffer of the same size that we
-        // are expected to copy and send.  This state of affairs is created if one of
-        // the Fill functions is called.  In this case, m_size must have been set
-        // to agree with m_dataSize
-        //
-        NS_ASSERT_MSG(m_dataSize == m_size,
-                      "CS598UdpEchoClient::Send(): m_size and m_dataSize inconsistent");
-        NS_ASSERT_MSG(m_data, "CS598UdpEchoClient::Send(): m_dataSize but no m_data");
-        p = Create<Packet>(m_data, m_dataSize);
-    }
-    else
-    {
-        //
-        // If m_dataSize is zero, the client has indicated that it doesn't care
-        // about the data itself either by specifying the data size by setting
-        // the corresponding attribute or by not calling a SetFill function.  In
-        // this case, we don't worry about it either.  But we do allow m_size
-        // to have a value different from the (zero) m_dataSize.
-        //
-        p = Create<Packet>(m_size);
-    }
+    // if (m_dataSize)
+    // {
+    //     //
+    //     // If m_dataSize is non-zero, we have a data buffer of the same size that we
+    //     // are expected to copy and send.  This state of affairs is created if one of
+    //     // the Fill functions is called.  In this case, m_size must have been set
+    //     // to agree with m_dataSize
+    //     //
+    //     NS_ASSERT_MSG(m_dataSize == m_size,
+    //                   "CS598UdpEchoClient::Send(): m_size and m_dataSize inconsistent");
+    //     NS_ASSERT_MSG(m_data, "CS598UdpEchoClient::Send(): m_dataSize but no m_data");
+    //     p = Create<Packet>(m_data, m_dataSize);
+    // }
+    // else
+    // {
+    //     //
+    //     // If m_dataSize is zero, the client has indicated that it doesn't care
+    //     // about the data itself either by specifying the data size by setting
+    //     // the corresponding attribute or by not calling a SetFill function.  In
+    //     // this case, we don't worry about it either.  But we do allow m_size
+    //     // to have a value different from the (zero) m_dataSize.
+    //     //
+    //     p = Create<Packet>(m_size);
+    // }
 
     Address localAddress;
 
-    // TODO: LOGIC TO FIGURE OUT WHICH SOCKET
     Ptr<Socket>& socket = m_socketFast;
     Address& peerAddress = m_peerAddressFast;
     uint16_t& peerPort = m_peerPortFast;
-    if (m_sent % 2 == 0) {
+    bool isFast = true;
+    // TODO: LOGIC TO FIGURE OUT WHICH SOCKET
+
+    isFast = calculateWhichSocket(p, peerAddress, localAddress);
+
+
+    if (isFast) {
         socket = m_socketFast;
         peerAddress = m_peerAddressFast;
         peerPort = m_peerPortFast;
+        p = Create<Packet>((uint8_t*)&m_bufferFast, sizeof(SequenceNumber));
+        m_bufferFast.seq++;
     } else {
         socket = m_socketSlow;
         peerAddress = m_peerAddressSlow;
         peerPort = m_peerPortSlow;
+        p = Create<Packet>((uint8_t*)&m_bufferSlow, sizeof(SequenceNumber));
+        m_bufferSlow.seq++;
     }
 
 
@@ -307,19 +322,25 @@ cs598EchoClient::Send()
     socket->Send(p);
     ++m_sent;
 
-    if (Ipv4Address::IsMatchingType(peerAddress))
-    {
-        NS_LOG_INFO("At time " << Simulator::Now().As(Time::S) << " client sent " << m_size
-                               << " bytes to " << Ipv4Address::ConvertFrom(peerAddress)
-                               << " port " << peerPort);
+    if (isFast) {
+        NS_LOG_INFO("Sent fast path.");
+    } else {
+        NS_LOG_INFO("Sent slow path.");
     }
-    else if (InetSocketAddress::IsMatchingType(peerAddress))
-    {
-        NS_LOG_INFO(
-            "At time " << Simulator::Now().As(Time::S) << " client sent " << m_size << " bytes to "
-                       << InetSocketAddress::ConvertFrom(peerAddress).GetIpv4() << " port "
-                       << InetSocketAddress::ConvertFrom(peerAddress).GetPort());
-    }
+
+    // if (Ipv4Address::IsMatchingType(peerAddress))
+    // {
+    //     NS_LOG_INFO("At time " << Simulator::Now().As(Time::S) << " client sent " << m_size
+    //                            << " bytes to " << Ipv4Address::ConvertFrom(peerAddress)
+    //                            << " port " << peerPort);
+    // }
+    // else if (InetSocketAddress::IsMatchingType(peerAddress))
+    // {
+    //     NS_LOG_INFO(
+    //         "At time " << Simulator::Now().As(Time::S) << " client sent " << m_size << " bytes to "
+    //                    << InetSocketAddress::ConvertFrom(peerAddress).GetIpv4() << " port "
+    //                    << InetSocketAddress::ConvertFrom(peerAddress).GetPort());
+    // }
 
     if (m_sent < m_count || m_count == 0)
     {
@@ -342,18 +363,40 @@ cs598EchoClient::HandleRead(Ptr<Socket> socket)
                                    << packet->GetSize() << " bytes from "
                                    << InetSocketAddress::ConvertFrom(from).GetIpv4() << " port "
                                    << InetSocketAddress::ConvertFrom(from).GetPort());
-        }
-        else if (Inet6SocketAddress::IsMatchingType(from))
-        {
-            NS_LOG_INFO("At time " << Simulator::Now().As(Time::S) << " client received "
-                                   << packet->GetSize() << " bytes from "
-                                   << Inet6SocketAddress::ConvertFrom(from).GetIpv6() << " port "
-                                   << Inet6SocketAddress::ConvertFrom(from).GetPort());
+            if (InetSocketAddress::ConvertFrom(from).GetIpv4() == m_peerAddressFast) {
+                // NS_LOG_INFO("Received from fast: " << m_recvdFast);
+                SequenceNumber seq;
+                packet->CopyData(seq.seqBytes, (uint32_t)sizeof(SequenceNumber));
+                m_packetLossCounterFast.NotifyReceived(seq.seq);
+            } else {
+                // NS_LOG_INFO("Received from slow: " << m_recvdSlow);
+                SequenceNumber seq;
+                packet->CopyData(seq.seqBytes, (uint32_t)sizeof(SequenceNumber));
+                m_packetLossCounterSlow.NotifyReceived(seq.seq);
+            }
         }
         socket->GetSockName(localAddress);
         m_rxTrace(packet);
         m_rxTraceWithAddresses(packet, from, localAddress);
     }
+}
+
+bool
+cs598EchoClient::calculateWhichSocket(Ptr<Packet> packet, Address from, Address localAddress)
+{
+    NS_LOG_FUNCTION(this << packet << from << localAddress);
+    NS_LOG_INFO("Packet loss fast: " << m_packetLossCounterFast.GetLost() << ", slow: " << m_packetLossCounterSlow.GetLost());
+
+    double pA = m_packetLossCounterFast.GetLost() / 64.0;
+    double pB = m_packetLossCounterSlow.GetLost() / 64.0;
+    double Tfast = 0.02*(1+pA)/(1-2*pA); // in seconds, 20ms
+    double Tslow = 0.06*(1+pB)/(1-2*pB); // in seconds, 60ms, from example
+
+    NS_LOG_INFO("pA: " << pA << ", pB: " << pB << ", Tfast: " << Tfast << ", Tslow: " << Tslow);
+    if (Tfast <= Tslow) {
+        return true;
+    }
+    return false;
 }
 
 }

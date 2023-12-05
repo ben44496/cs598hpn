@@ -15,11 +15,14 @@
 #include "ns3/ipv4-address.h"
 #include "ns3/ptr.h"
 #include "ns3/applications-module.h"
+#include "ns3/packet-loss-counter.h"
+#include "ns3/cs598-packet-loss-counter.h"
 #include <ns3/traced-callback.h>
-
+#include <stdint.h>
 
 namespace ns3
 {
+
 
 // Each class should be documented using Doxygen,
 // and have an \ingroup cs598-module directive
@@ -29,6 +32,11 @@ class Packet;
 class cs598EchoClient : public Application
 {
   public:
+    typedef union {
+      uint32_t seq;
+      uint8_t seqBytes[4];
+    } SequenceNumber;
+
     static TypeId GetTypeId();
 
     cs598EchoClient();
@@ -78,11 +86,20 @@ class cs598EchoClient : public Application
     uint16_t m_peerPortSlow;
     Ptr<Socket> m_socketSlow;
 
+
+    CS598PacketLossCounter m_packetLossCounterFast;
+    SequenceNumber m_bufferFast;
+    CS598PacketLossCounter m_packetLossCounterSlow;
+    SequenceNumber m_bufferSlow;
+
     EventId m_sendEvent; //!< Event to send the next packet
 #ifdef NS3_LOG_ENABLE
     std::string m_peerAddressString; //!< Remote peer address string
 #endif                               // NS3_LOG_ENABLE
 
+
+  bool calculateWhichSocket(Ptr<Packet> packet, Address from, Address localAddress);
+  // return true for fast, false for slow
 };
 
 }
