@@ -18,14 +18,10 @@ namespace ns3
 class cs598EchoClientHelper
 {
   public:
-    cs598EchoClientHelper(Address ip, uint16_t port);
-    cs598EchoClientHelper(Address addr);
+    cs598EchoClientHelper(Address ip, uint16_t port, Address ip2, uint16_t port2);
+    cs598EchoClientHelper(Address addr, Address addr2);
 
     void SetAttribute(std::string name, const AttributeValue& value);
-
-    void SetFill(Ptr<Application> app, std::string fill);
-    void SetFill(Ptr<Application> app, uint8_t fill, uint32_t dataLength);
-    void SetFill(Ptr<Application> app, uint8_t* fill, uint32_t fillLength, uint32_t dataLength);
 
     ApplicationContainer Install(Ptr<Node> node) const;
 

@@ -14,8 +14,12 @@ build_lib(
     LIBNAME cs598-echo-client
     SOURCE_FILES model/cs598-echo-client.cc
                  helper/cs598-echo-client-helper.cc
+                 model/cs598-udp-echo-client.cc
+                 model/cs598-udp-echo-server.cc
     HEADER_FILES model/cs598-echo-client.h
                  helper/cs598-echo-client-helper.h
+                 model/cs598-udp-echo-client.h
+                 model/cs598-udp-echo-server.h
     LIBRARIES_TO_LINK ${libinternet} ${libstats}
     TEST_SOURCES test/cs598-echo-client-test-suite.cc
                  ${examples_as_tests_sources}

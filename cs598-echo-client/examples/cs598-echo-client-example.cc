@@ -6,9 +6,15 @@
 #include "ns3/point-to-point-module.h"
 
 /**
- * \file
  *
- * Explain here what the example does.
+ *       10.1.1.x (fast)
+ *  --------------------
+ *  |                  |
+ * Node 0            Node 1
+ *  |                  |
+ *  --------------------
+ *       10.1.2.x (slow)
+ *
  */
 
 using namespace ns3;
@@ -90,49 +96,76 @@ main(int argc, char* argv[])
     address.SetBase("10.1.2.0", "255.255.255.0");
     Ipv4InterfaceContainer interfacesSlow = address.Assign(devicesSlow);
 
+    int flags = 1;
+    if (flags == 0) {
+        // Node 0 is client, node 1 is server
+        UdpEchoClientHelper echoClientFast(interfacesFast.GetAddress(1), 9);
+        echoClientFast.SetAttribute("MaxPackets", UintegerValue(nPackets));
+        echoClientFast.SetAttribute("Interval", TimeValue(Seconds(0.25)));
+        echoClientFast.SetAttribute("PacketSize", UintegerValue(1024));
 
-    // Node 0 is client, node 1 is server
-    cs598EchoClientHelper echoClientFast(interfacesFast.GetAddress(1), 9);
-    echoClientFast.SetAttribute("MaxPackets", UintegerValue(nPackets));
-    echoClientFast.SetAttribute("Interval", TimeValue(Seconds(0.25)));
-    echoClientFast.SetAttribute("PacketSize", UintegerValue(1024));
+        UdpEchoClientHelper echoClientSlow(interfacesSlow.GetAddress(1), 9);
+        echoClientSlow.SetAttribute("MaxPackets", UintegerValue(nPackets));
+        echoClientSlow.SetAttribute("Interval", TimeValue(Seconds(0.25)));
+        echoClientSlow.SetAttribute("PacketSize", UintegerValue(1024));
 
-    cs598EchoClientHelper echoClientSlow(interfacesSlow.GetAddress(1), 9);
-    echoClientSlow.SetAttribute("MaxPackets", UintegerValue(nPackets));
-    echoClientSlow.SetAttribute("Interval", TimeValue(Seconds(0.25)));
-    echoClientSlow.SetAttribute("PacketSize", UintegerValue(1024));
+        ApplicationContainer clientAppsFast = echoClientFast.Install(nodesFast.Get(0));
+        clientAppsFast.Start(Seconds(2.0));
+        clientAppsFast.Stop(Seconds(20.0));
 
-    ApplicationContainer clientAppsFast = echoClientFast.Install(nodesFast.Get(0));
-    clientAppsFast.Start(Seconds(2.0));
-    clientAppsFast.Stop(Seconds(20.0));
+        ApplicationContainer clientAppsSlow = echoClientSlow.Install(nodesSlow.Get(0));
+        clientAppsSlow.Start(Seconds(2.0));
+        clientAppsSlow.Stop(Seconds(20.0));
 
-    ApplicationContainer clientAppsSlow = echoClientSlow.Install(nodesSlow.Get(0));
-    clientAppsSlow.Start(Seconds(2.0));
-    clientAppsSlow.Stop(Seconds(20.0));
+        UdpEchoServerHelper echoServerFast(9);
+        UdpEchoServerHelper echoServerSlow(9);
 
-    UdpEchoServerHelper echoServerFast(9);
-    UdpEchoServerHelper echoServerSlow(9);
+        ApplicationContainer serverApps = echoServerFast.Install(nodesFast.Get(1));
+        serverApps.Start(Seconds(1.0));
+        serverApps.Stop(Seconds(20.0));
 
-    ApplicationContainer serverApps = echoServerFast.Install(nodesFast.Get(1));
-    serverApps.Start(Seconds(1.0));
-    serverApps.Stop(Seconds(20.0));
+        serverApps = echoServerSlow.Install(nodesSlow.Get(1));
+        serverApps.Start(Seconds(1.0));
+        serverApps.Stop(Seconds(20.0));
 
-    serverApps = echoServerSlow.Install(nodesSlow.Get(1));
-    serverApps.Start(Seconds(1.0));
-    serverApps.Stop(Seconds(20.0));
+        // Callbacks Start
+        devicesFast.Get(0)->TraceConnectWithoutContext("PhyTxBegin", MakeCallback(&PacketSent));
+        devicesSlow.Get(0)->TraceConnectWithoutContext("PhyTxBegin", MakeCallback(&PacketSent));
+        devicesFast.Get(1)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&RxDrop));
+        devicesSlow.Get(1)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&RxDrop));
+    } else if (flags == 1) {
+        // Using cs598EchoClientHelper
+        cs598EchoClientHelper echoClientHelperFast(interfacesFast.GetAddress(1), 9, interfacesSlow.GetAddress(1), 9);
+        echoClientHelperFast.SetAttribute("MaxPackets", UintegerValue(nPackets));
+        echoClientHelperFast.SetAttribute("Interval", TimeValue(Seconds(0.25)));
+        echoClientHelperFast.SetAttribute("PacketSize", UintegerValue(1024));
 
-    // Callbacks Start
-    devicesFast.Get(0)->TraceConnectWithoutContext("PhyTxBegin", MakeCallback(&PacketSent));
-    devicesSlow.Get(0)->TraceConnectWithoutContext("PhyTxBegin", MakeCallback(&PacketSent));
-    devicesFast.Get(1)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&RxDrop));
-    devicesSlow.Get(1)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&RxDrop));
+        ApplicationContainer clientApps = echoClientHelperFast.Install(nodesFast.Get(0));
+        clientApps.Start(Seconds(2.0));
+        clientApps.Stop(Seconds(20.0));
 
+        UdpEchoServerHelper echoServerFast(9);
+        UdpEchoServerHelper echoServerSlow(9);
+
+        ApplicationContainer serverApps = echoServerFast.Install(nodesFast.Get(1));
+        serverApps.Start(Seconds(1.0));
+        serverApps.Stop(Seconds(20.0));
+
+        serverApps = echoServerSlow.Install(nodesSlow.Get(1));
+        serverApps.Start(Seconds(1.0));
+        serverApps.Stop(Seconds(20.0));
+
+        devicesFast.Get(0)->TraceConnectWithoutContext("PhyTxBegin", MakeCallback(&PacketSent));
+        devicesSlow.Get(0)->TraceConnectWithoutContext("PhyTxBegin", MakeCallback(&PacketSent));
+        devicesFast.Get(1)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&RxDrop));
+        devicesSlow.Get(1)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&RxDrop));
+    }
 
     Simulator::Run();
-    Simulator::Destroy();
-
     std::cout << "Total packets sent: " << info.total_packets << std::endl;
     std::cout << "Total packets dropped: " << info.dropped_packets << std::endl;
+    Simulator::Destroy();
+
 
     return 0;
 }

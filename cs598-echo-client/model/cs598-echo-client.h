@@ -7,10 +7,14 @@
  * \defgroup cs598-module Description of the cs598-module
  */
 
+#include "ns3/cs598-udp-echo-client.h"
+// #include "ns3/cs598-udp-echo-server.h"
+
 #include "ns3/application.h"
 #include "ns3/event-id.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/ptr.h"
+#include "ns3/applications-module.h"
 #include <ns3/traced-callback.h>
 
 
@@ -31,17 +35,12 @@ class cs598EchoClient : public Application
 
     ~cs598EchoClient() override;
 
-    void SetRemote(Address ip, uint16_t port);
+    void SetRemote(Address ip, uint16_t port, bool isFast);
 
-    void SetRemote(Address addr);
+    void SetRemote(Address addr, bool isFast);
 
     void SetDataSize(uint32_t dataSize);
-
     uint32_t GetDataSize() const;
-
-    void SetFill(std::string fill);
-    void SetFill(uint8_t fill, uint32_t dataSize);
-    void SetFill(uint8_t* fill, uint32_t fillSize, uint32_t dataSize);
 
   protected:
     void DoDispose() override;
@@ -62,19 +61,24 @@ class cs598EchoClient : public Application
     TracedCallback<Ptr<const Packet>, const Address &, const Address &> m_txTraceWithAddresses;
     TracedCallback<Ptr<const Packet>, const Address &, const Address &> m_rxTraceWithAddresses;
 
-    uint32_t m_count; //!< Maximum number of packets the application will send
-    Time m_interval;  //!< Packet inter-send time
-    uint32_t m_size;  //!< Size of the sent packet (including the SeqTsHeader)
+    uint32_t m_count;
+    Time m_interval;
+    uint32_t m_size;
 
     uint32_t m_dataSize; //!< packet payload size (must be equal to m_size)
     uint8_t* m_data;     //!< packet payload data
 
-    uint32_t m_sent;       //!< Counter for sent packets
-    Ptr<Socket> m_socket;  //!< Socket
-    Address m_peerAddress; //!< Remote peer address
-    uint16_t m_peerPort;   //!< Remote peer port
-    EventId m_sendEvent;   //!< Event to send the next packet
+    uint32_t m_sent; //!< Counter for sent packets
 
+    Address m_peerAddressFast; //!< Remote peer address
+    uint16_t m_peerPortFast;   //!< Remote peer port
+    Ptr<Socket> m_socketFast;
+
+    Address m_peerAddressSlow;
+    uint16_t m_peerPortSlow;
+    Ptr<Socket> m_socketSlow;
+
+    EventId m_sendEvent; //!< Event to send the next packet
 #ifdef NS3_LOG_ENABLE
     std::string m_peerAddressString; //!< Remote peer address string
 #endif                               // NS3_LOG_ENABLE

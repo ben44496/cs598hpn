@@ -6,47 +6,31 @@
 #include "ns3/application-container.h"
 #include "ns3/node-container.h"
 
+NS_LOG_COMPONENT_DEFINE("cs598EchoClientHelper");
+
 namespace ns3
 {
 
-cs598EchoClientHelper::cs598EchoClientHelper(Address address, uint16_t port)
+cs598EchoClientHelper::cs598EchoClientHelper(Address address, uint16_t port, Address address2, uint16_t port2)
 {
     m_factory.SetTypeId(cs598EchoClient::GetTypeId());
-    SetAttribute("RemoteAddress", AddressValue(address));
-    SetAttribute("RemotePort", UintegerValue(port));
+    SetAttribute("RemoteAddressFast", AddressValue(address));
+    SetAttribute("RemotePortFast", UintegerValue(port));
+    SetAttribute("RemoteAddressSlow", AddressValue(address2));
+    SetAttribute("RemotePortSlow", UintegerValue(port2));
 }
 
-cs598EchoClientHelper::cs598EchoClientHelper(Address address)
+cs598EchoClientHelper::cs598EchoClientHelper(Address address, Address address2)
 {
     m_factory.SetTypeId(cs598EchoClient::GetTypeId());
-    SetAttribute("RemoteAddress", AddressValue(address));
+    SetAttribute("RemoteAddressFast", AddressValue(address));
+    SetAttribute("RemoteAddressSlow", AddressValue(address2));
 }
 
 void
 cs598EchoClientHelper::SetAttribute(std::string name, const AttributeValue& value)
 {
     m_factory.Set(name, value);
-}
-
-void
-cs598EchoClientHelper::SetFill(Ptr<Application> app, std::string fill)
-{
-    app->GetObject<cs598EchoClient>()->SetFill(fill);
-}
-
-void
-cs598EchoClientHelper::SetFill(Ptr<Application> app, uint8_t fill, uint32_t dataLength)
-{
-    app->GetObject<cs598EchoClient>()->SetFill(fill, dataLength);
-}
-
-void
-cs598EchoClientHelper::SetFill(Ptr<Application> app,
-                             uint8_t* fill,
-                             uint32_t fillLength,
-                             uint32_t dataLength)
-{
-    app->GetObject<cs598EchoClient>()->SetFill(fill, fillLength, dataLength);
 }
 
 ApplicationContainer
@@ -77,6 +61,7 @@ cs598EchoClientHelper::Install(NodeContainer c) const
 Ptr<Application>
 cs598EchoClientHelper::InstallPriv(Ptr<Node> node) const
 {
+    NS_LOG_INFO("Installing cs598EchoClient on node " << node->GetId());
     Ptr<Application> app = m_factory.Create<cs598EchoClient>();
     node->AddApplication(app);
 
