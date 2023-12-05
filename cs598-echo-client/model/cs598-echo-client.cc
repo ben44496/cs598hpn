@@ -12,7 +12,8 @@
 #include "ns3/socket-factory.h"
 #include "ns3/socket.h"
 #include "ns3/uinteger.h"
-
+// #include <string.h>
+#include "ns3/core-module.h"
 #include <cstdio>
 #include <cstdlib>
 
@@ -68,7 +69,13 @@ cs598EchoClient::GetTypeId()
                 "Size of echo data in outbound packets",
                 UintegerValue(100),
                 MakeUintegerAccessor(&cs598EchoClient::SetDataSize, &cs598EchoClient::GetDataSize),
-                MakeUintegerChecker<uint32_t>());
+                MakeUintegerChecker<uint32_t>())
+            .AddAttribute(
+                "Always",
+                "Always send on fast or slow path",
+                StringValue(""),
+                MakeStringAccessor(&cs598EchoClient::SetAlways),
+                MakeStringChecker());
 
     return tid;
 }
@@ -290,21 +297,25 @@ cs598EchoClient::Send()
     bool isFast = true;
     // TODO: LOGIC TO FIGURE OUT WHICH SOCKET
 
-    isFast = calculateWhichSocket(p, peerAddress, localAddress);
+    isFast = calculateWhichSocket();
 
-
-    if (isFast) {
+    // std::cout << m_always << std::endl;
+    if ((isFast && m_always == "") || m_always == "fast") {
+    // if (isFast) {
         socket = m_socketFast;
         peerAddress = m_peerAddressFast;
         peerPort = m_peerPortFast;
         p = Create<Packet>((uint8_t*)&m_bufferFast, sizeof(SequenceNumber));
         m_bufferFast.seq++;
-    } else {
+        NS_LOG_INFO("T" << Simulator::Now().As(Time::S) << ": Sent fast path.");
+    } else if ((!isFast && m_always == "") || m_always == "slow") {
+    // } else if (!isFast) {
         socket = m_socketSlow;
         peerAddress = m_peerAddressSlow;
         peerPort = m_peerPortSlow;
         p = Create<Packet>((uint8_t*)&m_bufferSlow, sizeof(SequenceNumber));
         m_bufferSlow.seq++;
+        NS_LOG_INFO("T" << Simulator::Now().As(Time::S) << ": Sent slow path.");
     }
 
 
@@ -321,12 +332,6 @@ cs598EchoClient::Send()
     }
     socket->Send(p);
     ++m_sent;
-
-    if (isFast) {
-        NS_LOG_INFO("Sent fast path.");
-    } else {
-        NS_LOG_INFO("Sent slow path.");
-    }
 
     // if (Ipv4Address::IsMatchingType(peerAddress))
     // {
@@ -359,20 +364,24 @@ cs598EchoClient::HandleRead(Ptr<Socket> socket)
     {
         if (InetSocketAddress::IsMatchingType(from))
         {
-            NS_LOG_INFO("At time " << Simulator::Now().As(Time::S) << " client received "
-                                   << packet->GetSize() << " bytes from "
-                                   << InetSocketAddress::ConvertFrom(from).GetIpv4() << " port "
-                                   << InetSocketAddress::ConvertFrom(from).GetPort());
+        //     NS_LOG_INFO("At time " << Simulator::Now().As(Time::S) << " client received "
+        //                            << packet->GetSize() << " bytes from "
+        //                            << InetSocketAddress::ConvertFrom(from).GetIpv4() << " port "
+        //                            << InetSocketAddress::ConvertFrom(from).GetPort());
             if (InetSocketAddress::ConvertFrom(from).GetIpv4() == m_peerAddressFast) {
-                // NS_LOG_INFO("Received from fast: " << m_recvdFast);
+                NS_LOG_INFO("T" << Simulator::Now().As(Time::S) << ": Received from fast");
                 SequenceNumber seq;
                 packet->CopyData(seq.seqBytes, (uint32_t)sizeof(SequenceNumber));
+                // std::cout << seq.seq << std::endl;
                 m_packetLossCounterFast.NotifyReceived(seq.seq);
+                NS_LOG_INFO("T" << Simulator::Now().As(Time::S) << ": Sequence Number: " << seq.seq);
             } else {
-                // NS_LOG_INFO("Received from slow: " << m_recvdSlow);
+                NS_LOG_INFO("T" << Simulator::Now().As(Time::S) << ": Received from slow");
                 SequenceNumber seq;
                 packet->CopyData(seq.seqBytes, (uint32_t)sizeof(SequenceNumber));
+                // std::cout << seq.seq << std::endl;
                 m_packetLossCounterSlow.NotifyReceived(seq.seq);
+                NS_LOG_INFO("T" << Simulator::Now().As(Time::S) << ": Sequence Number: " << seq.seq);
             }
         }
         socket->GetSockName(localAddress);
@@ -382,21 +391,28 @@ cs598EchoClient::HandleRead(Ptr<Socket> socket)
 }
 
 bool
-cs598EchoClient::calculateWhichSocket(Ptr<Packet> packet, Address from, Address localAddress)
+cs598EchoClient::calculateWhichSocket()
 {
-    NS_LOG_FUNCTION(this << packet << from << localAddress);
-    NS_LOG_INFO("Packet loss fast: " << m_packetLossCounterFast.GetLost() << ", slow: " << m_packetLossCounterSlow.GetLost());
+    NS_LOG_FUNCTION(this);
+    NS_LOG_INFO("T" << Simulator::Now().As(Time::S) << ": Packet loss fast: " << m_packetLossCounterFast.GetLost() << ", slow: " << m_packetLossCounterSlow.GetLost());
 
     double pA = m_packetLossCounterFast.GetLost() / 64.0;
     double pB = m_packetLossCounterSlow.GetLost() / 64.0;
-    double Tfast = 0.02*(1+pA)/(1-2*pA); // in seconds, 20ms
+    double Tfast = 0.04*(1+pA)/(1-2*pA); // in seconds, 20ms
     double Tslow = 0.06*(1+pB)/(1-2*pB); // in seconds, 60ms, from example
 
-    NS_LOG_INFO("pA: " << pA << ", pB: " << pB << ", Tfast: " << Tfast << ", Tslow: " << Tslow);
+    NS_LOG_INFO("T" << Simulator::Now().As(Time::S) << ": pA: " << pA << ", pB: " << pB << ", Tfast: " << Tfast << ", Tslow: " << Tslow);
     if (Tfast <= Tslow) {
         return true;
     }
     return false;
 }
 
+
+void
+cs598EchoClient::SetAlways(const std::string& always)
+{
+    NS_LOG_FUNCTION(this);
+    m_always = always;
+}
 }

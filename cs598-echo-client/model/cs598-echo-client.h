@@ -50,6 +50,8 @@ class cs598EchoClient : public Application
     void SetDataSize(uint32_t dataSize);
     uint32_t GetDataSize() const;
 
+    void SetAlways(const std::string& always);
+
   protected:
     void DoDispose() override;
 
@@ -92,13 +94,15 @@ class cs598EchoClient : public Application
     CS598PacketLossCounter m_packetLossCounterSlow;
     SequenceNumber m_bufferSlow;
 
+    std::string m_always = "";
+
     EventId m_sendEvent; //!< Event to send the next packet
 #ifdef NS3_LOG_ENABLE
     std::string m_peerAddressString; //!< Remote peer address string
 #endif                               // NS3_LOG_ENABLE
 
 
-  bool calculateWhichSocket(Ptr<Packet> packet, Address from, Address localAddress);
+  bool calculateWhichSocket();
   // return true for fast, false for slow
 };
 
